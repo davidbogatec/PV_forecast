@@ -78,14 +78,30 @@ current_wind = current_data['wind_speed_10m']
 current_sky = wmo_codes.get(current_data['weather_code'], "Unknown")
 
 # --- MODERN STREAMLIT UI HEADER ---
-st.markdown("<h2 style='text-align: center; margin-bottom: 0px;'>☀️ PV Forecast</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #888; font-size: 14px; margin-top: 5px;'>📍 6.3 kW System</p>", unsafe_allow_html=True)
+# Top Header and Subheader with smaller fonts
+st.markdown("<h4 style='text-align: center; margin-bottom: 0px; font-size: 18px;'>☀️ PV Forecast</h4>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #888; font-size: 11px; margin-top: 2px; margin-bottom: 10px;'>📍 6.3 kW System</p>", unsafe_allow_html=True)
 
-# Weather Metrics
-cols = st.columns(3)
-cols[0].metric("🌡️ Temp", f"{current_temp} °C")
-cols[1].metric("💨 Wind", f"{current_wind} km/h")
-cols[2].metric("☁️ Sky", current_sky)
+# Weather Metrics with smaller fonts and compact spacing
+st.markdown(
+    f"""
+    <div style="display: flex; justify-content: space-around; text-align: center; margin-bottom: 15px;">
+        <div style="flex: 1;">
+            <span style="font-size: 11px; color: #888; display: block;">🌡️ Temp</span>
+            <span style="font-size: 13px; font-weight: bold;">{current_temp} °C</span>
+        </div>
+        <div style="flex: 1;">
+            <span style="font-size: 11px; color: #888; display: block;">💨 Wind</span>
+            <span style="font-size: 13px; font-weight: bold;">{current_wind} km/h</span>
+        </div>
+        <div style="flex: 1;">
+            <span style="font-size: 11px; color: #888; display: block;">☁️ Sky</span>
+            <span style="font-size: 13px; font-weight: bold;">{current_sky}</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # Total Yield Highlight
 st.success(f"**⚡ 3-Day Expected Yield:** {total_energy_kwh:.1f} kWh")
@@ -119,10 +135,11 @@ for i, date in enumerate(unique_days):
             x=daily_data.index,
             y=daily_data.values,
             mode='lines',
-            name='Power (W)',
+            name='Power',
             line=dict(color='#FFD700', width=2, shape='spline'),
             fill='tozeroy',
             fillcolor='rgba(255, 215, 0, 0.15)',
+            hovertemplate='%{y:.0f} W', # 0 decimals for Power
             showlegend=(i == 0)
         ),
         row=i + 1, col=1, secondary_y=False
@@ -134,8 +151,9 @@ for i, date in enumerate(unique_days):
             x=daily_data.index,
             y=cumulative_kwh,
             mode='lines',
-            name='Energy (kWh)',
+            name='Energy',
             line=dict(color='#00E5FF', width=2, dash='dot', shape='spline'),
+            hovertemplate='%{y:.1f} kWh', # 1 decimal for Energy
             showlegend=(i == 0)
         ),
         row=i + 1, col=1, secondary_y=True
@@ -160,14 +178,14 @@ for i, date in enumerate(unique_days):
 # 8. Mobile styling
 fig.update_layout(
     template="plotly_dark",
-    height=750, # Slightly reduced height since title moved out
+    height=750,
     dragmode=False,
     hovermode="x unified",
     legend=dict(
         orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5,
         bgcolor="rgba(0,0,0,0)", font=dict(size=10)
     ),
-    margin=dict(t=20, b=20, l=10, r=10), # Severely minimized top margin
+    margin=dict(t=20, b=20, l=10, r=10),
     font=dict(family="Arial, sans-serif", size=10)
 )
 
