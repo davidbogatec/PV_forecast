@@ -9,10 +9,10 @@ from pvlib.location import Location
 from pvlib.modelchain import ModelChain
 from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
 
-# Set Streamlit page config at the very beginning
-st.set_page_config(page_title="PV Forecast", layout="wide")
+# 1. Set minimal, mobile-friendly config
+st.set_page_config(page_title="PV Forecast", layout="centered")
 
-# 1. Define Location (Rome, Italy)
+# Define Location (Rome, Italy)
 latitude = 45.73263
 longitude = 13.69278
 tz = 'Europe/Rome'
@@ -45,13 +45,10 @@ params = {
 response = requests.get(url, params=params)
 data = response.json()
 
-# --- ERROR HANDLING ---
-# Catch API errors (like rate limits or invalid parameters) before they crash the app
 if "hourly" not in data:
-    st.error("⚠️ The Weather API returned an error instead of data.")
-    st.json(data)  # Display the exact API error message in the Streamlit app
-    st.stop()  # Stop execution safely
-# ----------------------
+    st.error("⚠️ Weather API error.")
+    st.json(data)
+    st.stop()
 
 # 4. Format the API Data for pvlib
 weather = pd.DataFrame({
@@ -62,131 +59,117 @@ weather = pd.DataFrame({
     'wind_speed': data['hourly']['wind_speed_10m']
 })
 
-# Convert timestamps
-weather.index = pd.to_datetime(data['hourly']['time'])
-weather.index = weather.index.tz_localize(tz)
+weather.index = pd.to_datetime(data['hourly']['time']).tz_localize(tz)
 
 # 5. Run the Forecast Model
 mc.run_model(weather)
-forecasted_power = mc.results.ac.fillna(0)  # AC Power output in Watts
+forecasted_power = mc.results.ac.fillna(0)
+total_energy_kwh = forecasted_power.sum() / 1000
 
 # 6. Extract Current Weather Conditions
 current_data = data['current']
 wmo_codes = {
     0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
-    45: 'Fog', 48: 'Depositing rime fog', 51: 'Light drizzle', 53: 'Moderate drizzle',
-    55: 'Dense drizzle', 56: 'Light freezing drizzle', 57: 'Dense freezing drizzle',
-    61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain', 66: 'Light freezing rain',
-    67: 'Heavy freezing rain', 71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow',
-    77: 'Snow grains', 80: 'Slight rain showers', 81: 'Moderate rain showers',
-    82: 'Violent rain showers', 85: 'Slight snow showers', 86: 'Heavy snow showers',
-    95: 'Thunderstorm', 96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail'
+    61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain', 71: 'Slight snow',
+    95: 'Thunderstorm'
 }
 current_temp = current_data['temperature_2m']
 current_wind = current_data['wind_speed_10m']
 current_sky = wmo_codes.get(current_data['weather_code'], "Unknown")
 
+# --- MODERN STREAMLIT UI HEADER ---
+st.markdown("<h2 style='text-align: center; margin-bottom: 0px;'>☀️ PV Forecast</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #888; font-size: 14px; margin-top: 5px;'>📍 6.3 kW System</p>", unsafe_allow_html=True)
+
+# Weather Metrics
+cols = st.columns(3)
+cols[0].metric("🌡️ Temp", f"{current_temp} °C")
+cols[1].metric("💨 Wind", f"{current_wind} km/h")
+cols[2].metric("☁️ Sky", current_sky)
+
+# Total Yield Highlight
+st.success(f"**⚡ 3-Day Expected Yield:** {total_energy_kwh:.1f} kWh")
+st.markdown("---")
+# ----------------------------------
+
 # 7. Group by Day and Visualize
 grouped_power = forecasted_power.groupby(forecasted_power.index.date)
 unique_days = list(grouped_power.groups.keys())
 
-# Generate styled subplot titles
-subplot_titles = []
-for date in unique_days:
-    daily_energy_kwh = grouped_power.get_group(date).sum() / 1000
-    subplot_titles.append(
-        f"📅 {date.strftime('%B %d, %Y')} &nbsp;&nbsp;|&nbsp;&nbsp; ⚡ Total: {daily_energy_kwh:.2f} kWh")
+subplot_titles = [
+    f"{date.strftime('%b %d')} | ⚡ {grouped_power.get_group(date).sum() / 1000:.1f} kWh"
+    for date in unique_days
+]
 
-# Create a 3-row interactive figure WITH secondary Y-axes
 fig = make_subplots(
     rows=3, cols=1,
     subplot_titles=subplot_titles,
-    vertical_spacing=0.08,
+    vertical_spacing=0.1,
     specs=[[{"secondary_y": True}], [{"secondary_y": True}], [{"secondary_y": True}]]
 )
 
 for i, date in enumerate(unique_days):
     daily_data = grouped_power.get_group(date)
-
-    # Calculate hourly and cumulative energy
     hourly_kwh = daily_data.values / 1000
     cumulative_kwh = pd.Series(hourly_kwh).cumsum().values
 
-    # Trace 1: Power output in Watts (Primary Y-Axis - Filled Area)
+    # Trace 1: Power output (W)
     fig.add_trace(
         go.Scatter(
             x=daily_data.index,
             y=daily_data.values,
             mode='lines',
             name='Power (W)',
-            line=dict(color='#FFD700', width=3, shape='spline'),
+            line=dict(color='#FFD700', width=2, shape='spline'),
             fill='tozeroy',
             fillcolor='rgba(255, 215, 0, 0.15)',
-            customdata=hourly_kwh,
-            hovertemplate="<b style='color:#FFD700'>Power Output:</b> %{y:.0f} W<br><b>Energy (this hr):</b> %{customdata:.2f} kWh<extra></extra>",
             showlegend=(i == 0)
         ),
         row=i + 1, col=1, secondary_y=False
     )
 
-    # Trace 2: Cumulative Energy in kWh (Secondary Y-Axis)
+    # Trace 2: Cumulative Energy (kWh)
     fig.add_trace(
         go.Scatter(
             x=daily_data.index,
             y=cumulative_kwh,
             mode='lines',
-            name='Cumulative Energy (kWh)',
-            line=dict(color='#00E5FF', width=3, dash='dot', shape='spline'),
-            hovertemplate="<b style='color:#00E5FF'>Total Accumulated:</b> %{y:.2f} kWh<extra></extra>",
+            name='Energy (kWh)',
+            line=dict(color='#00E5FF', width=2, dash='dot', shape='spline'),
             showlegend=(i == 0)
         ),
         row=i + 1, col=1, secondary_y=True
     )
 
-    # Format axes for each subplot
+    # Lock zooming and clean axes
     fig.update_xaxes(
-        tickformat="%H:%M", row=i + 1, col=1,
-        showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', zeroline=False
+        tickformat="%H:%M", row=i + 1, col=1, fixedrange=True,
+        showgrid=True, gridcolor='rgba(255, 255, 255, 0.05)', zeroline=False
     )
     fig.update_yaxes(
-        title_text="Power (Watts)", row=i + 1, col=1, secondary_y=False,
-        showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', zeroline=False,
-        title_font=dict(color='#FFD700')
+        row=i + 1, col=1, secondary_y=False, fixedrange=True,
+        showgrid=True, gridcolor='rgba(255, 255, 255, 0.05)', zeroline=False,
+        showticklabels=False
     )
     fig.update_yaxes(
-        title_text="Cumulative (kWh)", row=i + 1, col=1, secondary_y=True,
+        row=i + 1, col=1, secondary_y=True, fixedrange=True,
         showgrid=False, zeroline=False,
-        title_font=dict(color='#00E5FF')
+        showticklabels=False
     )
 
-# Apply global dark theme and overarching styling
+# 8. Mobile styling
 fig.update_layout(
     template="plotly_dark",
-    title=dict(
-        text=f"<span style='font-size:26px; color:#FFD700;'><b>☀️ PV Production Forecast & Cumulative Output</b></span><br>"
-             f"<span style='font-size:14px; color:#A0A0A0;'><i>📍 6.3 kW System &nbsp;|&nbsp; 🌡️ {current_temp}°C &nbsp;|&nbsp; 💨 {current_wind} km/h &nbsp;|&nbsp; ☁️ {current_sky}</i></span>",
-        x=0.5,
-        xanchor='center'
-    ),
-    height=1050,
+    height=750, # Slightly reduced height since title moved out
+    dragmode=False,
     hovermode="x unified",
-    hoverlabel=dict(
-        bgcolor="rgba(20, 20, 20, 0.9)",
-        bordercolor="#444",
-        font_size=14,
-        font_family="Segoe UI, Arial, sans-serif"
-    ),
     legend=dict(
-        orientation="h", yanchor="bottom", y=1.03, xanchor="right", x=1,
-        bgcolor="rgba(0,0,0,0)"
+        orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5,
+        bgcolor="rgba(0,0,0,0)", font=dict(size=10)
     ),
-    margin=dict(t=130, b=40, l=40, r=40),
-    font=dict(family="Segoe UI, Arial, sans-serif")
+    margin=dict(t=20, b=20, l=10, r=10), # Severely minimized top margin
+    font=dict(family="Arial, sans-serif", size=10)
 )
 
-# 8. Calculate total energy BEFORE rendering in Streamlit
-total_energy_kwh = forecasted_power.sum() / 1000
-
-# 9. Render Streamlit Elements
-st.plotly_chart(fig, use_container_width=True)
-st.success(f"Total forecasted energy for the next 3 days: **{total_energy_kwh:.2f} kWh**")
+# 9. Render Streamlit Elements with Toolbar Disabled
+st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
