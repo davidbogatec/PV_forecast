@@ -159,7 +159,7 @@ for i, date in enumerate(unique_days):
         row=i + 1, col=1, secondary_y=True
     )
 
-    # Lock zooming and clean axes
+    # Lock zooming and clean axes, enable tick labels
     fig.update_xaxes(
         tickformat="%H:%M", row=i + 1, col=1, fixedrange=True,
         showgrid=True, gridcolor='rgba(255, 255, 255, 0.05)', zeroline=False
@@ -167,12 +167,12 @@ for i, date in enumerate(unique_days):
     fig.update_yaxes(
         row=i + 1, col=1, secondary_y=False, fixedrange=True,
         showgrid=True, gridcolor='rgba(255, 255, 255, 0.05)', zeroline=False,
-        showticklabels=False
+        showticklabels=True
     )
     fig.update_yaxes(
         row=i + 1, col=1, secondary_y=True, fixedrange=True,
         showgrid=False, zeroline=False,
-        showticklabels=False
+        showticklabels=True
     )
 
 # 8. Mobile styling
