@@ -178,7 +178,7 @@ for i, date in enumerate(unique_days):
 # 8. Mobile styling
 fig.update_layout(
     template="plotly_dark",
-    height=750,
+    height=550,
     dragmode=False,
     hovermode="x unified",
     legend=dict(
